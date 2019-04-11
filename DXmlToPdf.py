@@ -980,11 +980,13 @@ if __name__ == "__main__":
     config.remove_section('ERROR')
     try:
         config = configparser.ConfigParser()
-        config.read(iniFileName, 'ansi')
-#        config.read(iniFileName)
-#        config.read(iniFileName, 'utf-8-sig')
+#        config.read(iniFileName, 'ansi')
+        config.read(iniFileName, 'utf-8')
     except SystemExit as e:
-        OutErrMsg(7, iniFileName)
+        try:
+            config.read(iniFileName, 'utf-8-sig')
+        except  SystemExit as e:
+            OutErrMsg(7, iniFileName)
 
     ConfigSet('Args', 'TEST', 'args.FileName')
     try:
