@@ -980,13 +980,13 @@ if __name__ == "__main__":
     config.remove_section('ERROR')
     try:
         config = configparser.ConfigParser()
-#        config.read(iniFileName, 'ansi')
         config.read(iniFileName, 'utf-8')
+    except configparser.MissingSectionHeaderError as e:
+        config.read(iniFileName, 'utf-8-sig')
+    except UnicodeDecodeError as e:
+        config.read(iniFileName, 'ansi')
     except SystemExit as e:
-        try:
-            config.read(iniFileName, 'utf-8-sig')
-        except  SystemExit as e:
-            OutErrMsg(7, iniFileName)
+        OutErrMsg(7, iniFileName)
 
     ConfigSet('Args', 'TEST', 'args.FileName')
     try:
@@ -996,9 +996,6 @@ if __name__ == "__main__":
         args = parser.parse_args()
         isBrowse = args.browse
 
-        print(args)
-
-
         ConfigSet('Args', 'FileName', args.FileName)
         ConfigSetBool('Args', 'Browse', args.browse)
         DXmlToPdf(args.FileName)
@@ -1006,7 +1003,7 @@ if __name__ == "__main__":
     except SystemExit as e:
         OutErrMsg(1, args.FileName)        # エラー理由をINIファイルに書き込み
 
-#    with open(iniFileName, 'w', encoding='utf8') as configfile:
-    with open(iniFileName, 'w', encoding='ansi') as configfile:
+    with open(iniFileName, 'w', encoding='utf8') as configfile:
+#    with open(iniFileName, 'w', encoding='ansi') as configfile:
         config.write(configfile)
 
