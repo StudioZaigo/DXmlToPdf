@@ -3,9 +3,6 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.lib.colors import black, red
 import datetime
-#import addpage
-#from pdfformfiller import PdfFormFiller
-#import DPdfEdit
 
 class Pdf:
     PAGE_SIZE = {'x': 595, 'y': 842}       # A4サイズ（x,y） x,yは、ポイント  辞書型です

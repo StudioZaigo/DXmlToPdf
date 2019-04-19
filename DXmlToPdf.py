@@ -687,10 +687,11 @@ def Jikousho(root, pFile, dict):
     s2 = ''
     for n2 in n1.findall('p:周波数情報', ns):
         s1 = ConfigGet('BAND', n2.find('p:周波数帯', ns).text or '')
-        s21 = n2.find('p:記号', ns).text or ''
+        s21 = n2.find('p:記号', ns).text or ''    # 3MA,2HC等の記号
+
         if s21 != '':
             s2 += (',' + s21)
-        for n3 in n2.findall('p:電波の型式等情報', ns):
+        for n3 in n2.findall('p:電波の型式等情報', ns):     # 3MA,2HC等の記号に含まれない電波型式
             s21 = n3.find('p:電波の型式', ns).text or ''
             if s21 == '':
                 break
@@ -698,7 +699,7 @@ def Jikousho(root, pFile, dict):
             s22 = n3.find('p:占有周波数帯幅', ns).text or ''
             if s22 != '':
                 s2 += ('(' + s22 + ')')
-        s2 = s2[1:]
+        s2 = s2[1:]                                         # 電波の型式を全部まとめたもの
 
         f = float('0' + (n2.find('p:空中線電力', ns).text or ''))
         un = ['kW', 'W', 'mW', 'nW', 'uW']
@@ -706,42 +707,33 @@ def Jikousho(root, pFile, dict):
         for x, u in enumerate([1000, 1, 0.001, 0.000001, 0.000000001]):
             f1 = f // u
             if f1 != 0:
-                s3 = str(int(f / u)) + un[x]
+                s3 = str(int(f / u)) + un[x]                # 空中電電力
                 break
-        z = SplitText(pFile, s2, abs(pFile.textPos2[4]) - abs(pFile.textPos2[3]))
-        for s2 in z:
-            pFile.PrintText3(i.Inc(), '', s1, s2, s3, False, False)
-            s1 = ''
-            s3 = ''
-            u = False
-        s1 = ''
+
+        z = SplitText(pFile, s2, abs(pFile.LinePos[1]) - abs(pFile.textPos3[2]) - 5)    # 最初行の最後まで長さで分けてみる
+        for j in range(len(z)):
+            if j == len(z) - 1:
+                y = SplitText(pFile, z[j], abs(pFile.textPos3[3]) - abs(pFile.textPos3[2]) - 5)  # 空中線電力が行内で印刷できるか？
+                if len(y) == 1:
+                    pFile.PrintText3(i.Inc(), '', s1, z[j], s3, False, False, True)
+                elif len(y) == 2:
+                    pFile.PrintText3(i.Inc(), '', s1, z[j], '', False, False, True)
+                    pFile.PrintText3(i.Inc(), '', '', '', s3, False, False, True)
+        #       else:
+        #            pass    # このケースは無いはず
+            else:
+                pFile.PrintText3(i.Inc(), '', s1, z[j], '', False, False, True)
+                s1 = ''
         s2 = ''
 
     pFile.DrowHorizontalLine(i.Get(), False, True)
 
     if dict['手続き'] == 'D053':
-        # s = ''
-        # ｎ1 = n.find('p:変更項目', ns)
-        # if (n1.find('p:c.呼出符号', ns).text or '') == '1':
-        #     s += ', 3. 呼出符号'
-        # if (n1.find('p:c.申請_届出_者名等', ns).text or '') == '1':
-        #     s += ', 5. 申請者名等'
-        # if (n1.find('p:c.無線従事者免許証の番号', ns).text or '') == '1':
-        #     s += ',8. 無線従事者免許証の番号'
-        # if (n1.find('p:c.無線設備の設置場所又は常置場所', ns).text or '') == '1':
-        #     s += ',11. 設置/常置場所'
-        # if (n1.find('p:c.移動範囲', ns).text or '') == '1':
-        #     s += ',12. 常置場所'
-        # if (n1.find('p:c.電波の型式並びに希望する周波数及び空中線電力', ns).text or '') == '1':
-        #     s += ',13. 電波の型式/周波数/空中線電力'
-        # if (n1.find('p:c.工事設計書', ns).text or '') == '1':
-        #     s += ',16. 工事設計書'
-        # if s != '':
-        #     s = s[1:]
         s = ", ".join(changeItem)
         pFile.PrintText1(i.Inc(), '14. 変更する項目', s, False, True)
 
     pFile.PrintText1(i.Inc(), '15. 備考', '', True, True)
+    j = j + 1
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
 
@@ -786,7 +778,7 @@ def Sekkeisho1(root, pFile, dict, i):
                     if s4 != '':
                         s3 = s3 + '(' + s4 + ')'
                 s3 = s3[1:]
-                z = SplitText(pFile, s3, abs(pFile.textPos2[5]) - abs(pFile.textPos2[3]))
+                z = SplitText(pFile, s3, abs(pFile.LinePos[1]) - abs(pFile.textPos3[2] - 5))
                 for s3 in z:
                     pFile.PrintText3(i.Inc(), s1, s2, s3, '', u, False, printing)
                     s1 = ''
@@ -807,7 +799,7 @@ def Sekkeisho1(root, pFile, dict, i):
                 u = False
 
             n1 = n.find('p:終段管', ns)
-            s1 = '終段管'
+            s1 = '終段管/電圧'
             u = True
             t1 = []
             t2 = []
@@ -980,9 +972,9 @@ if __name__ == "__main__":
     config.remove_section('ERROR')
     try:
         config = configparser.ConfigParser()
-        config.read(iniFileName, 'utf-8')
-    except configparser.MissingSectionHeaderError as e:
         config.read(iniFileName, 'utf-8-sig')
+    except configparser.MissingSectionHeaderError as e:
+        config.read(iniFileName, 'utf-8')
     except UnicodeDecodeError as e:
         config.read(iniFileName, 'ansi')
     except SystemExit as e:
@@ -1003,7 +995,6 @@ if __name__ == "__main__":
     except SystemExit as e:
         OutErrMsg(1, args.FileName)        # エラー理由をINIファイルに書き込み
 
-    with open(iniFileName, 'w', encoding='utf8') as configfile:
-#    with open(iniFileName, 'w', encoding='ansi') as configfile:
+    with open(iniFileName, 'w', encoding='utf-8-sig') as configfile:
         config.write(configfile)
 
