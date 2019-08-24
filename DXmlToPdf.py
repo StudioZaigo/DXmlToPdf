@@ -286,7 +286,6 @@ def XmlCommon(root):
 
 
 def Saimen(root, pFile, dict):
-#    dict = XmlCommon(root)
     if dict['ERROR']:
         OutErrMsg(5)      # ファイル形式不正
         return
@@ -322,9 +321,9 @@ def Saimen(root, pFile, dict):
 
     i.Inc()
 
-    n = root.find('p:申請書/p:再免許情報', ns)
+#    n = root.find('p:申請書/p:再免許情報', ns)         # 20190824 Delete
     pFile.PrintText1(i.Inc(), '2. 欠格事項', '')
-    pFile.PrintText1(i.Inc(),'欠格事由の有無', dict['欠格事由の有無'], True, True)
+    pFile.PrintText1(i.Inc(), '欠格事由の有無', dict['欠格事由の有無'], True, True)
     j = i.Get()
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
@@ -334,7 +333,7 @@ def Saimen(root, pFile, dict):
     pFile.PrintText1(i.Inc(), '免許の番号', dict['免許の番号'], True, False)
     j = i.Get()
     if dict['呼出符号'] != '':
-        pFile.PrintLine(i.Inc(), '呼出符号', dict['呼出符号'], True, False)
+        pFile.PrintText1(i.Inc(), '呼出符号', dict['呼出符号'], True, False)        # 2019-08-25 修正
     pFile.PrintText1(i.Inc(), '免許の年月日', dict['免許の年月日'], True, False)
     pFile.PrintText1(i.Inc(), '備考', dict['備考'], True, True)
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
@@ -986,14 +985,19 @@ if __name__ == "__main__":
         parser.add_argument('FileName', help='Input file name')
         parser.add_argument('-b', '--browse', help='Browse rusult file', action='store_true')
         args = parser.parse_args()
+        FileName = args.FileName
         isBrowse = args.browse
 
-        ConfigSet('Args', 'FileName', args.FileName)
-        ConfigSetBool('Args', 'Browse', args.browse)
-        DXmlToPdf(args.FileName)
+#        inFileName = r"C:\Users\Kunio\Python Projects\DXmlToPdf\shinsei_E19-0000120282-D.zip"    # for DEBUG
+#        isBrowse = True                                                                          # for DEBUG
+
+# Iniファイルにファイル名等を書き込む
+        ConfigSet('Args', 'FileName', inFileName)
+        ConfigSetBool('Args', 'Browse', isBrowse)
+        DXmlToPdf(inFileName)
 
     except SystemExit as e:
-        OutErrMsg(1, args.FileName)        # エラー理由をINIファイルに書き込み
+        OutErrMsg(1, inFileName)        # エラー理由をINIファイルに書き込み
 
     with open(iniFileName, 'w', encoding='utf-8-sig') as configfile:
         config.write(configfile)
