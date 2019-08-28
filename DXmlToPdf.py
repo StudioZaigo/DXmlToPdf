@@ -989,7 +989,7 @@ if __name__ == "__main__":
         isBrowse = args.browse
 
 #        inFileName = r"shinsei_E19-0000120282-D.zip"    # for DEBUG
-#        isBrowse = True                                                                          # for DEBUG
+#        isBrowse = True                                 # for DEBUG
 
 # Iniファイルにファイル名等を書き込む
         ConfigSet('Args', 'FileName', inFileName)
