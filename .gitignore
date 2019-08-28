@@ -126,3 +126,6 @@ dmypy.json
 
 *.pdf
 *.zip
+DXmlToPdf.bat
+DXmlToPdf.ini
+

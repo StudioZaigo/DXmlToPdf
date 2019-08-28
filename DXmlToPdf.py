@@ -985,10 +985,10 @@ if __name__ == "__main__":
         parser.add_argument('FileName', help='Input file name')
         parser.add_argument('-b', '--browse', help='Browse rusult file', action='store_true')
         args = parser.parse_args()
-        FileName = args.FileName
+        inFileName = args.FileName
         isBrowse = args.browse
 
-#        inFileName = r"C:\Users\Kunio\Python Projects\DXmlToPdf\shinsei_E19-0000120282-D.zip"    # for DEBUG
+#        inFileName = r"shinsei_E19-0000120282-D.zip"    # for DEBUG
 #        isBrowse = True                                                                          # for DEBUG
 
 # Iniファイルにファイル名等を書き込む
