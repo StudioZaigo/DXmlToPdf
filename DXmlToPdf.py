@@ -1,4 +1,4 @@
-﻿import os
+import os
 import argparse
 import zipfile
 
@@ -26,12 +26,12 @@ def OutErrMsg(ErrNo, Option=''):
     ConfigSet('ERROR', 'Message', s)
 
 iniFileName = './DXmlToPdf.ini'
-
+tempFileName = '/DXmlToPdf.pdf'
 
 isBrowse = True
 config = configparser.ConfigParser()
 jichitai = dict()
-#dict = {}
+itemsdict = dict()
 
 ns = {'m': 'http://www.denpa.soumu.go.jp/sinsei/kousei',
       'ds': 'http://www.w3.org/2000/09/xmldsig#',
@@ -64,7 +64,6 @@ def SplitText(pFile, text, length):
         t.append(r[1:])
     return t
 
-
 def ConfigGet(section, option, default=''):
     r = default
     if section in config:
@@ -80,9 +79,10 @@ def ConfigGetInt(section, option, default=0):
     return r
 
 def ConfigSet(section, option, value):
-    if not (section in config):
-        config.add_section(section)
-    config.set(section, option, value)
+    if (value is not None) and (value != ''):
+        if not (section in config):
+            config.add_section(section)
+        config.set(section, option, value)
 
 def ConfigSetInt(section, option, value):
     ConfigSet(section, option, str(value))
@@ -91,6 +91,7 @@ def ConfigSetBool(section, option, value):
     ConfigSet(section, option, str(value))
 
 def LoadJichitaiCode():
+    jichitai.clear()
     with open('JichitaiCode.txt', encoding='utf-8') as f:
         for line in f:
             s = line.split()
@@ -98,12 +99,15 @@ def LoadJichitaiCode():
             s2 = s[1]
             jichitai[s1] = s2
 
+# 原因不明 2020-06-03
+# '01: 北海道'が登録されているはずなのにNoneが帰る
+# とりあえずJichitaiの最初にDummyを挿入した
 def GetJichitai(code):
     if code == '':
         return ''
     if len(jichitai) == 0:      # 自治体コードがロードされてないなら
         LoadJichitaiCode()
-    s = jichitai[code]
+    s = jichitai.get(code, '')
     return s
 
 def XmlTetsuzuki(node):
@@ -175,346 +179,345 @@ def XmlGiteki(node, version):
 def XmlUmu(node):
     return "有" if (node.text or '') == '1' else "無"
 
-
 def XmlCommon(root):
-    dict = {}
-    dict.clear()
-    dict['ERROR'] = False
+    itemsdict = dict()
+    itemsdict.clear()
+    itemsdict['ERROR'] = False
     d = XmlTetsuzuki(root)
-    dict['手続き'] = d[0]
-    dict['手続き名'] = d[1]
-    if dict['手続き名'] == '':
-        dict['ERROR'] = True
-        return
-    dict['申請書バージョン'] = XmlVersion(root)
+    itemsdict['手続き'] = d[0]
+    itemsdict['手続き名'] = d[1]
+    if itemsdict['手続き名'] == '':
+        itemsdict['ERROR'] = True
+        return itemsdict
+    itemsdict['申請書バージョン'] = XmlVersion(root)
 
 # 0.申請者先に関する項目
-    dict['宛先'] = ConfigGet('ATESAKI', root.find('p:申請書/p:申請事項/p:宛先', ns).text or '')
-    dict['申請区分'] = ConfigGet('SHINSEI', root.find('p:申請書/p:申請事項/p:申請区分', ns).text or '')
+    itemsdict['宛先'] = ConfigGet('ATESAKI', root.find('p:申請書/p:申請事項/p:宛先', ns).text or '')
+    itemsdict['申請区分'] = ConfigGet('SHINSEI', root.find('p:申請書/p:申請事項/p:申請区分', ns).text or '')
 
 # 1.申請者に関する項目
     n = root.find('p:申請書/p:申請者等情報', ns)
-    dict['個人_社団の別'] = ConfigGet('RADIO', n.find('p:団体_個人の別', ns).text or '')
-    if dict['個人_社団の別'] == '個人':    # 個人
-        dict['社団名'] = ''
-        dict['社団名フリガナ'] = ''
-        dict['氏名'] = n.find('p:社団名_クラブ名_又は氏名', ns).text or ''
-        dict['氏名フリガナ'] = n.find('p:社団名_クラブ名_又は氏名フリガナ', ns).text or ''
+    itemsdict['個人_社団の別'] = ConfigGet('RADIO', n.find('p:団体_個人の別', ns).text or '')
+    if itemsdict['個人_社団の別'] == '個人':    # 個人
+        itemsdict['社団名'] = ''
+        itemsdict['社団名フリガナ'] = ''
+        itemsdict['氏名'] = n.find('p:社団名_クラブ名_又は氏名', ns).text or ''
+        itemsdict['氏名フリガナ'] = n.find('p:社団名_クラブ名_又は氏名フリガナ', ns).text or ''
     else:
-        dict['社団名'] = n.find('p:社団名_クラブ名_又は氏名', ns).text or ''
-        dict['社団名フリガナ'] = n.find('p:社団名_クラブ名_又は氏名フリガナ', ns).text or ''
-        dict['氏名'] = n.find('p:代表者名', ns).text or ''
-        dict['氏名フリガナ'] = n.find('p:代表者名フリガナ', ns).text or ''
+        itemsdict['社団名'] = n.find('p:社団名_クラブ名_又は氏名', ns).text or ''
+        itemsdict['社団名フリガナ'] = n.find('p:社団名_クラブ名_又は氏名フリガナ', ns).text or ''
+        itemsdict['氏名'] = n.find('p:代表者名', ns).text or ''
+        itemsdict['氏名フリガナ'] = n.find('p:代表者名フリガナ', ns).text or ''
     s = n.find('p:郵便番号', ns).text or ''
-    dict['郵便番号'] = s[0:3] + '-' + s[3:7]
-    dict['都道府県'] = GetJichitai(n.find('p:住所/p:都道府県_市区町村/p:都道府県', ns).text or '')
-    dict['市区町村'] = GetJichitai(n.find('p:住所/p:都道府県_市区町村/p:市区町村', ns).text or '')
-    dict['町名'] = n.find('p:住所/p:町_丁目', ns).text or ''
-    dict['住所'] = dict['都道府県'] + dict['市区町村'] + dict['町名']
-    dict['電話番号'] = n.find('p:電話番号', ns).text or ''
-    dict['国籍'] = GetJichitai(n.find('p:国籍', ns).text or '')
+    itemsdict['郵便番号'] = s[0:3] + '-' + s[3:7]
+    itemsdict['都道府県'] = GetJichitai(n.find('p:住所/p:都道府県_市区町村/p:都道府県', ns).text or '')
+    itemsdict['市区町村'] = GetJichitai(n.find('p:住所/p:都道府県_市区町村/p:市区町村', ns).text or '')
+    itemsdict['町名'] = n.find('p:住所/p:町_丁目', ns).text or ''
+    itemsdict['住所'] = itemsdict['都道府県'] + itemsdict['市区町村'] + itemsdict['町名']
+    itemsdict['電話番号'] = n.find('p:電話番号', ns).text or ''
+    itemsdict['国籍'] = GetJichitai(n.find('p:国籍', ns).text or '')
 
 # 2.欠格事由に関する項目
-    if dict['申請書バージョン'] <= '0008':
+    if itemsdict['申請書バージョン'] <= '0008':
         n = root.find('p:申請書/p:再免許情報/p:無線局事項書及び工事設計書の内容/p:欠格事由の有無', ns)
     else:
         n = root.find('p:申請書/p:欠格事由', ns)
-    dict['欠格事由の有無'] = XmlUmu(n)
+    itemsdict['欠格事由の有無'] = XmlUmu(n)
 
 # 3.免許に関する項目
-    if dict['手続き'] == 'D055':       # 廃局の時
+    if itemsdict['手続き'] == 'D055':       # 廃局の時
         n = root.find('p:申請書/p:廃止情報', ns)
-        dict['免許の番号'] = XmlMenkyo(n.find('p:免許の番号', ns))
-        dict['呼出符号'] = n.find('p:呼出符号', ns).text or ''
-        dict['廃止年月日'] = XmlDate(n.find('p:廃止する年月日', ns))
-        dict['備考'] = n.find('p:廃止_備考', ns) or ''
-    elif dict['手続き'] == 'D053':  # 変更の時
+        itemsdict['免許の番号'] = XmlMenkyo(n.find('p:免許の番号', ns))
+        itemsdict['呼出符号'] = n.find('p:呼出符号', ns).text or ''
+        itemsdict['廃止年月日'] = XmlDate(n.find('p:廃止する年月日', ns))
+        itemsdict['備考'] = n.find('p:廃止_備考', ns) or ''
+    elif itemsdict['手続き'] == 'D053':  # 変更の時
         n = root.find('p:申請書/p:事項書_工事設計書情報/p:無線局の種別等', ns)
-        dict['免許の番号'] = XmlMenkyo(n.find('p:免許の番号', ns))
-        dict['呼出符号'] = n.find('p:呼出符号', ns).text or ''
-        dict['備考'] = ''
+        itemsdict['免許の番号'] = XmlMenkyo(n.find('p:免許の番号', ns))
+        itemsdict['呼出符号'] = n.find('p:呼出符号', ns).text or ''
+        itemsdict['備考'] = ''
     else:
-        if dict['申請書バージョン'] <= '0008':
+        if itemsdict['申請書バージョン'] <= '0008':
             n = root.find('p:申請書/p:再免許情報', ns)
-            dict['免許の番号'] = XmlMenkyo(n.find('p:免許の番号', ns))
-            dict['呼出符号'] = n.find('p:呼出符号', ns).text or ''
-            dict['免許の年月日'] = XmlDate(n.find('p:免許の年月日', ns))
-            dict['備考'] = n.find('p:備考/備考_入力欄', ns) or ''
+            itemsdict['免許の番号'] = XmlMenkyo(n.find('p:免許の番号', ns))
+            itemsdict['呼出符号'] = n.find('p:呼出符号', ns).text or ''
+            itemsdict['免許の年月日'] = XmlDate(n.find('p:免許の年月日', ns))
+            itemsdict['備考'] = n.find('p:備考/備考_入力欄', ns) or ''
         else:
             n = root.find('p:申請書', ns)
-            dict['免許の番号'] = XmlMenkyo(n.find('p:免許の番号', ns))
-            dict['呼出符号'] = n.find('p:呼出符号', ns).text or ''
-            dict['免許の年月日'] = XmlDate(n.find('p:免許の年月日', ns))
-            dict['備考'] = n.find('p:備考/備考_入力欄', ns) or ''
+            itemsdict['免許の番号'] = XmlMenkyo(n.find('p:免許の番号', ns))
+            itemsdict['呼出符号'] = n.find('p:呼出符号', ns).text or ''
+            itemsdict['免許の年月日'] = XmlDate(n.find('p:免許の年月日', ns))
+            itemsdict['備考'] = n.find('p:備考/備考_入力欄', ns) or ''
 
 # 4.電波利用料に関する項目
     n = root.find('p:申請書/p:電波利用料の前納の申出', ns)
-    dict['前納_有無'] = XmlUmu(n.find('p:前納_有無', ns))
-    if dict['前納_有無'] == '有':
+    itemsdict['前納_有無'] = XmlUmu(n.find('p:前納_有無', ns))
+    if itemsdict['前納_有無'] == '有':
         s = n.find('p:前納に係る期間/p:前納に係る期間区分', ns).text or ''
         if s  == '1':
-            dict['前納期間'] = '無線局の免許の有効期間まで前納します。'
+            itemsdict['前納期間'] = '無線局の免許の有効期間まで前納します。'
         else:
-            dict['前納期間'] = 'その他（' + (n.find('p:前納に係る期間/p:年', ns).text or '') + '年）'
+            itemsdict['前納期間'] = 'その他（' + (n.find('p:前納に係る期間/p:年', ns).text or '') + '年）'
     else:
-        dict['前納期間'] = ''
+        itemsdict['前納期間'] = ''
 
 # 5.連絡先に関する項目
-    if dict['申請書バージョン'] <= '0008':
-        dict['連絡先氏名'] = ''
-        dict['連絡先氏名フリガナ'] = ''
-        dict['連絡先電話番号'] = ''
-        dict['電子メールアドレス'] = ''
+    if itemsdict['申請書バージョン'] <= '0008':
+        itemsdict['連絡先氏名'] = ''
+        itemsdict['連絡先氏名フリガナ'] = ''
+        itemsdict['連絡先電話番号'] = ''
+        itemsdict['電子メールアドレス'] = ''
     else:
         n = root.find('p:申請書/p:申請者等情報/p:申請に関する連絡責任者', ns)
-        dict['連絡先氏名'] = n.find('p:氏名', ns).text or ''
-        dict['連絡先氏名フリガナ'] = n.find('p:氏名フリガナ', ns).text or ''
-        dict['連絡先電話番号'] = n.find('p:電話番号', ns).text or ''
-        dict['電子メールアドレス'] = n.find('p:電子メールアドレス', ns).text or ''
+        itemsdict['連絡先氏名'] = n.find('p:氏名', ns).text or ''
+        itemsdict['連絡先氏名フリガナ'] = n.find('p:氏名フリガナ', ns).text or ''
+        itemsdict['連絡先電話番号'] = n.find('p:電話番号', ns).text or ''
+        itemsdict['電子メールアドレス'] = n.find('p:電子メールアドレス', ns).text or ''
 
 # 6.申請手数料等に関する項目
-    if dict['申請書バージョン'] >= '0009':
+    if itemsdict['申請書バージョン'] >= '0009':
         n = root.find('p:申請書/p:申請手数料', ns)
-        dict['手数料額'] =  int('0' + (n.find('p:手数料額', ns).text or ''))
+        itemsdict['手数料額'] =  int('0' + (n.find('p:手数料額', ns).text or ''))
         n = root.find('p:申請書/p:免許状受取方法', ns)
         d = ['', '返信用封筒別送', '窓口受領', '送料受取人払いによる受領(料金:500円)']
         s = '0' + (n.find('p:免許状受取区分', ns).text or '')
-        dict['免許状受取方法'] = d[int(s)]
+        itemsdict['免許状受取方法'] = d[int(s)]
 
-    return dict
+    return itemsdict
 
 
 
-def Saimen(root, pFile, dict):
-    if dict['ERROR']:
+def Saimen(root, pFile, itemsdict):
+    if itemsdict.get('ERROR') == True:
         OutErrMsg(5)      # ファイル形式不正
         return
     pFile.PrintHeader()
     i = Count(0)
-    pFile.PrintText0(i.Get(), 200, dict['手続き名'])
+    pFile.PrintText0(i.Get(), 200, itemsdict['手続き名'])
 
     i.Inc()
 
-    pFile.PrintText1(i.Inc(), '宛先', dict['宛先'], True, True)
+    pFile.PrintText1(i.Inc(), '宛先', itemsdict['宛先'], True, True)
     j = i.Get()
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
     i.Inc()
 
     pFile.PrintText1(i.Inc(), '1. 申請者', '')
-    pFile.PrintText1(i.Inc(),'個人_社団の別', dict['個人_社団の別'], True, False)
+    pFile.PrintText1(i.Inc(),'個人_社団の別', itemsdict['個人_社団の別'], True, False)
     j = i.Get()
-    pFile.PrintText1(i.Inc(), '郵便番号', dict['郵便番号'], True, False)
-    pFile.PrintText1(i.Inc(), '住所', dict['住所'], True, False)
-    pFile.PrintText1(i.Inc(), '電話番号', dict['電話番号'], True, False)
-    if dict['国籍'] != '':
-        pFile.PrintText1(i.Inc(), '国籍', dict['国籍'], True, False)
-    if dict['個人_社団の別'] == '個人':    # 個人
-        pFile.PrintText1(i.Inc(), '(代表者)氏名', dict['氏名'], True, False)
-        pFile.PrintText1(i.Inc(), '上記フリガナ', dict['氏名フリガナ'], True, True)
+    pFile.PrintText1(i.Inc(), '郵便番号', itemsdict['郵便番号'], True, False)
+    pFile.PrintText1(i.Inc(), '住所', itemsdict['住所'], True, False)
+    pFile.PrintText1(i.Inc(), '電話番号', itemsdict['電話番号'], True, False)
+    if itemsdict['国籍'] != '':
+        pFile.PrintText1(i.Inc(), '国籍', itemsdict['国籍'], True, False)
+    if itemsdict['個人_社団の別'] == '個人':    # 個人
+        pFile.PrintText1(i.Inc(), '(代表者)氏名', itemsdict['氏名'], True, False)
+        pFile.PrintText1(i.Inc(), '上記フリガナ', itemsdict['氏名フリガナ'], True, True)
     else:
-        pFile.PrintText1(i.Inc(), '社団名', dict['社団名'], True, False)
-        pFile.PrintText1(i.Inc(), '上記フリガナ', dict['社団名フリガナ'], True, False)
-        pFile.PrintText1(i.Inc(), '(代表者)氏名', dict['氏名'], True, False)
-        pFile.PrintText1(i.Inc(), '上記フリガナ', dict['氏名フリガナ'], True, True)
+        pFile.PrintText1(i.Inc(), '社団名', itemsdict['社団名'], True, False)
+        pFile.PrintText1(i.Inc(), '上記フリガナ', itemsdict['社団名フリガナ'], True, False)
+        pFile.PrintText1(i.Inc(), '(代表者)氏名', itemsdict['氏名'], True, False)
+        pFile.PrintText1(i.Inc(), '上記フリガナ', itemsdict['氏名フリガナ'], True, True)
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
     i.Inc()
 
 #    n = root.find('p:申請書/p:再免許情報', ns)         # 20190824 Delete
     pFile.PrintText1(i.Inc(), '2. 欠格事項', '')
-    pFile.PrintText1(i.Inc(), '欠格事由の有無', dict['欠格事由の有無'], True, True)
+    pFile.PrintText1(i.Inc(), '欠格事由の有無', itemsdict['欠格事由の有無'], True, True)
     j = i.Get()
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
     i.Inc()
 
     pFile.PrintText1(i.Inc(), '3. 免許/再免許に関する事項', '')
-    pFile.PrintText1(i.Inc(), '免許の番号', dict['免許の番号'], True, False)
+    pFile.PrintText1(i.Inc(), '免許の番号', itemsdict['免許の番号'], True, False)
     j = i.Get()
-    if dict['呼出符号'] != '':
-        pFile.PrintText1(i.Inc(), '呼出符号', dict['呼出符号'], True, False)        # 2019-08-25 修正
-    pFile.PrintText1(i.Inc(), '免許の年月日', dict['免許の年月日'], True, False)
-    pFile.PrintText1(i.Inc(), '備考', dict['備考'], True, True)
+    if itemsdict['呼出符号'] != '':
+        pFile.PrintText1(i.Inc(), '呼出符号', itemsdict['呼出符号'], True, False)        # 2019-08-25 修正
+    pFile.PrintText1(i.Inc(), '免許の年月日', itemsdict['免許の年月日'], True, False)
+    pFile.PrintText1(i.Inc(), '備考', itemsdict['備考'], True, True)
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
     i.Inc()
 
     pFile.PrintText1(i.Inc(), '4. 電波利用料', '')
-    pFile.PrintText1(i.Inc(), '前納_有無', dict['前納_有無'], True, False)
+    pFile.PrintText1(i.Inc(), '前納_有無', itemsdict['前納_有無'], True, False)
     j = i.Get()
-    pFile.PrintText1(i.Inc(), '前納にかかる期間', dict['前納期間'], True, True)
+    pFile.PrintText1(i.Inc(), '前納にかかる期間', itemsdict['前納期間'], True, True)
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
     i.Inc()
 
     n = root.find('p:申請書/p:申請者等情報/p:申請に関する連絡責任者', ns)
     pFile.PrintText1(i.Inc(), '5. 連絡先', '')
-    pFile.PrintText1(i.Inc(), '氏名', dict['連絡先氏名'], True, False)
+    pFile.PrintText1(i.Inc(), '氏名', itemsdict['連絡先氏名'], True, False)
     j = i.Get()
-    pFile.PrintText1(i.Inc(), '上記フリガナ', dict['連絡先氏名フリガナ'], True, False)
-    pFile.PrintText1(i.Inc(), '電話番号', dict['連絡先電話番号'], True, False)
-    pFile.PrintText1(i.Inc(), 'E-Mailアドレス', dict['電子メールアドレス'], True, True)
+    pFile.PrintText1(i.Inc(), '上記フリガナ', itemsdict['連絡先氏名フリガナ'], True, False)
+    pFile.PrintText1(i.Inc(), '電話番号', itemsdict['連絡先電話番号'], True, False)
+    pFile.PrintText1(i.Inc(), 'E-Mailアドレス', itemsdict['電子メールアドレス'], True, True)
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
-    if dict['申請書バージョン'] >= '0009':
+    if itemsdict['申請書バージョン'] >= '0009':
         i.Inc()
 
         n = root.find('p:申請書/p:申請手数料', ns)
         pFile.PrintText1(i.Inc(), '申請手数料等', '')
         k = int('0' + (n.find('p:手数料額', ns).text or ''))
-        pFile.PrintText1(i.Inc(), '申請手数料', "{:,}".format(dict['手数料額']) + ' 円　　電子納付', True, False)
+        pFile.PrintText1(i.Inc(), '申請手数料', "{:,}".format(itemsdict['手数料額']) + ' 円　　電子納付', True, False)
         j = i.Get()
-        pFile.PrintText1(i.Inc(), '免許状受取方法', dict['免許状受取方法'], True, True)
+        pFile.PrintText1(i.Inc(), '免許状受取方法', itemsdict['免許状受取方法'], True, True)
         pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
     pFile.Finalize()
 
 
 
-def Haikyoku(root, pFile, dict):
-#    dict = XmlCommon(root)
-    if dict['ERROR']:
+def Haikyoku(root, pFile, itemsdict):
+#    itemsdict = XmlCommon(root)
+    if itemsdict.get('ERROR') == True:
         OutErrMsg(5)      # ファイル形式不正
         return
     pFile.PrintHeader()
     i = Count(0)
-    pFile.PrintText0(i.Get(), 200, dict['手続き名'])
+    pFile.PrintText0(i.Get(), 200, itemsdict['手続き名'])
 
     i.Inc()
 
-    pFile.PrintText1(i.Inc(), '宛先', dict['宛先'], False, False)
+    pFile.PrintText1(i.Inc(), '宛先', itemsdict['宛先'], False, False)
     j = i.Get()
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
     i.Inc()
 
     pFile.PrintText1(i.Inc(), '1. 届出者', '')
-    pFile.PrintText1(i.Inc(),'個人_社団の別', dict['個人_社団の別'], False, False)
+    pFile.PrintText1(i.Inc(),'個人_社団の別', itemsdict['個人_社団の別'], False, False)
     j = i.Get()
-    pFile.PrintText1(i.Inc(), '郵便番号', dict['郵便番号'], True, False)
-    pFile.PrintText1(i.Inc(), '住所', dict['住所'], True, False)
-    pFile.PrintText1(i.Inc(), '電話番号', dict['電話番号'], True, False)
-    if dict['国籍'] != '':
-        pFile.PrintText1(i.Inc(), '国籍', dict['国籍'], True, False)
-    if dict['個人_社団の別'] == '個人':    # 個人
-        pFile.PrintText1(i.Inc(), '氏名', dict['氏名'], True, False)
-        pFile.PrintText1(i.Inc(), '上記フリガナ', dict['氏名フリガナ'], True, True)
+    pFile.PrintText1(i.Inc(), '郵便番号', itemsdict['郵便番号'], True, False)
+    pFile.PrintText1(i.Inc(), '住所', itemsdict['住所'], True, False)
+    pFile.PrintText1(i.Inc(), '電話番号', itemsdict['電話番号'], True, False)
+    if itemsdict['国籍'] != '':
+        pFile.PrintText1(i.Inc(), '国籍', itemsdict['国籍'], True, False)
+    if itemsdict['個人_社団の別'] == '個人':    # 個人
+        pFile.PrintText1(i.Inc(), '氏名', itemsdict['氏名'], True, False)
+        pFile.PrintText1(i.Inc(), '上記フリガナ', itemsdict['氏名フリガナ'], True, True)
     else:
-        pFile.PrintText1(i.Inc(), '社団名', dict['社団名'], True, False)
-        pFile.PrintText1(i.Inc(), '上記フリガナ', dict['社団名フリガナ'], True, False)
-        pFile.PrintText1(i.Inc(), '代表者氏名', dict['氏名'], True, False)
-        pFile.PrintText1(i.Inc(), '上記フリガナ', dict['氏名フリガナ'], True, False)
+        pFile.PrintText1(i.Inc(), '社団名', itemsdict['社団名'], True, False)
+        pFile.PrintText1(i.Inc(), '上記フリガナ', itemsdict['社団名フリガナ'], True, False)
+        pFile.PrintText1(i.Inc(), '代表者氏名', itemsdict['氏名'], True, False)
+        pFile.PrintText1(i.Inc(), '上記フリガナ', itemsdict['氏名フリガナ'], True, False)
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
     i.Inc()
 
     pFile.PrintText1(i.Inc(), '2. 廃止に係る事項', '')
-    pFile.PrintText1(i.Inc(), '呼出符号', dict['呼出符号'], False, False)
+    pFile.PrintText1(i.Inc(), '呼出符号', itemsdict['呼出符号'], False, False)
     j = i.Get()
-    pFile.PrintText1(i.Inc(), '免許の番号', dict['免許の番号'], True, False)
-    pFile.PrintText1(i.Inc(), '廃止年月日', dict['廃止年月日'], True, False)
-    pFile.PrintText1(i.Inc(), '備考', dict['備考'], True, False)
+    pFile.PrintText1(i.Inc(), '免許の番号', itemsdict['免許の番号'], True, False)
+    pFile.PrintText1(i.Inc(), '廃止年月日', itemsdict['廃止年月日'], True, False)
+    pFile.PrintText1(i.Inc(), '備考', itemsdict['備考'], True, False)
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
     i.Inc()
 
     pFile.PrintText1(i.Inc(), '3. 連絡先', '')
-    pFile.PrintText1(i.Inc(), '氏名', dict['連絡先氏名'], False, False)
+    pFile.PrintText1(i.Inc(), '氏名', itemsdict['連絡先氏名'], False, False)
     j = i.Get()
-    pFile.PrintText1(i.Inc(), '上記フリガナ', dict['連絡先氏名フリガナ'], True, False)
-    pFile.PrintText1(i.Inc(), '電話番号', dict['連絡先電話番号'], True, False)
-    pFile.PrintText1(i.Inc(), 'E-Mailアドレス', dict['電子メールアドレス'], True, False)
+    pFile.PrintText1(i.Inc(), '上記フリガナ', itemsdict['連絡先氏名フリガナ'], True, False)
+    pFile.PrintText1(i.Inc(), '電話番号', itemsdict['連絡先電話番号'], True, False)
+    pFile.PrintText1(i.Inc(), 'E-Mailアドレス', itemsdict['電子メールアドレス'], True, False)
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
     pFile.Finalize()
 
 
-def KaikyokuHenkou(root, pFile, dict):
-#    dict = XmlCommon(root)
-    if dict['ERROR']:
+def KaikyokuHenkou(root, pFile, itemsdict):
+#    itemsdict = XmlCommon(root)
+    if itemsdict.get('ERROR') == True:
         OutErrMsg(5)      # ファイル形式不正
         return
     pFile.PrintHeader()
     i = Count(0)
-    pFile.PrintText0(i.Get(), 200, dict['手続き名'])
+    pFile.PrintText0(i.Get(), 200, itemsdict['手続き名'])
 
     i.Inc()
 
-    pFile.PrintText1(i.Inc(), '宛先', dict['宛先'], False, False)
+    pFile.PrintText1(i.Inc(), '宛先', itemsdict['宛先'], False, False)
     j = i.Get()
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
     i.Inc()
 
     pFile.PrintText1(i.Inc(), '1. 申請者', '')
-    pFile.PrintText1(i.Inc(),'個人_社団の別', dict['個人_社団の別'], True, False)
+    pFile.PrintText1(i.Inc(),'個人_社団の別', itemsdict['個人_社団の別'], True, False)
     j = i.Get()
-    pFile.PrintText1(i.Inc(), '郵便番号', dict['郵便番号'], True, False)
-    pFile.PrintText1(i.Inc(), '住所', dict['住所'], True, False)
-    pFile.PrintText1(i.Inc(), '電話番号', dict['電話番号'], True, False)
-    if dict['国籍'] != '':
-        pFile.PrintText1(i.Inc(), '国籍', dict['国籍'], True, False)
-    if dict['個人_社団の別'] == '個人':    # 個人
-        pFile.PrintText1(i.Inc(), '氏名', dict['氏名'], True, False)
-        pFile.PrintText1(i.Inc(), '上記フリガナ', dict['氏名フリガナ'], True, True)
+    pFile.PrintText1(i.Inc(), '郵便番号', itemsdict['郵便番号'], True, False)
+    pFile.PrintText1(i.Inc(), '住所', itemsdict['住所'], True, False)
+    pFile.PrintText1(i.Inc(), '電話番号', itemsdict['電話番号'], True, False)
+    if itemsdict['国籍'] != '':
+        pFile.PrintText1(i.Inc(), '国籍', itemsdict['国籍'], True, False)
+    if itemsdict['個人_社団の別'] == '個人':    # 個人
+        pFile.PrintText1(i.Inc(), '氏名', itemsdict['氏名'], True, False)
+        pFile.PrintText1(i.Inc(), '上記フリガナ', itemsdict['氏名フリガナ'], True, True)
     else:
-        pFile.PrintText1(i.Inc(), '社団名', dict['社団名'], True, False)
-        pFile.PrintText1(i.Inc(), '上記フリガナ', dict['社団名フリガナ'], True, False)
-        pFile.PrintText1(i.Inc(), '(代表者)氏名', dict['氏名'], True, False)
-        pFile.PrintText1(i.Inc(), '上記フリガナ', dict['氏名フリガナ'], True, True)
+        pFile.PrintText1(i.Inc(), '社団名', itemsdict['社団名'], True, False)
+        pFile.PrintText1(i.Inc(), '上記フリガナ', itemsdict['社団名フリガナ'], True, False)
+        pFile.PrintText1(i.Inc(), '(代表者)氏名', itemsdict['氏名'], True, False)
+        pFile.PrintText1(i.Inc(), '上記フリガナ', itemsdict['氏名フリガナ'], True, True)
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
-    if dict['手続き'] == 'D051':       # 開局の時のみ
+    if itemsdict['手続き'] == 'D051':       # 開局の時のみ
         i.Inc()
 
         n = root.find('p:申請書/p:再免許情報', ns)
         pFile.PrintText1(i.Inc(), '2. 欠格事項', '')
-        pFile.PrintText1(i.Inc(),'欠格事由の有無', dict['欠格事由の有無'], True, True)
+        pFile.PrintText1(i.Inc(),'欠格事由の有無', itemsdict['欠格事由の有無'], True, True)
         j = i.Get()
         pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
-    if dict['手続き'] == 'D053':       # 変更の時のみ
+    if itemsdict['手続き'] == 'D053':       # 変更の時のみ
         i.Inc()
 
         pFile.PrintText1(i.Inc(), '2. 無線局に関する事項', '')
-        pFile.PrintText1(i.Inc(), '呼出符号', dict['呼出符号'], True, False)
+        pFile.PrintText1(i.Inc(), '呼出符号', itemsdict['呼出符号'], True, False)
         j = i.Get()
-        pFile.PrintText1(i.Inc(), '免許の番号', dict['免許の番号'], True, False)
-        pFile.PrintText1(i.Inc(), '備考', dict['備考'], True, True)
+        pFile.PrintText1(i.Inc(), '免許の番号', itemsdict['免許の番号'], True, False)
+        pFile.PrintText1(i.Inc(), '備考', itemsdict['備考'], True, True)
         pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
-    if dict['手続き'] == 'D051':       # 開局の時のみ
+    if itemsdict['手続き'] == 'D051':       # 開局の時のみ
         i.Inc()
         n = root.find('p:申請書/p:電波利用料の前納の申出', ns)
         pFile.PrintText1(i.Inc(), '4. 電波利用料', '')
-        pFile.PrintText1(i.Inc(), '申出の有無', dict['前納_有無'], True, False)
+        pFile.PrintText1(i.Inc(), '申出の有無', itemsdict['前納_有無'], True, False)
         j = i.Get()
-        if dict['前納_有無'] != '無':
-            pFile.PrintText1(i.Inc(), '前納期間', dict['前納期間'], True, True)
+        if itemsdict['前納_有無'] != '無':
+            pFile.PrintText1(i.Inc(), '前納期間', itemsdict['前納期間'], True, True)
         pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
     i.Inc()
-    if dict['申請書バージョン'] <= '0008':
+    if itemsdict['申請書バージョン'] <= '0008':
         pass
     else:
-        if dict['手続き'] == 'D051':
+        if itemsdict['手続き'] == 'D051':
             z = '5'
         else:
             z = '3'
         n = root.find('p:申請書/p:申請者等情報/p:申請に関する連絡責任者', ns)
         pFile.PrintText1(i.Inc(), z + '. 連絡先', '')
-        pFile.PrintText1(i.Inc(), '氏名', dict['連絡先氏名'], True, False)
+        pFile.PrintText1(i.Inc(), '氏名', itemsdict['連絡先氏名'], True, False)
         j = i.Get()
-        pFile.PrintText1(i.Inc(), '上記フリガナ', dict['連絡先氏名フリガナ'], True, False)
-        pFile.PrintText1(i.Inc(), '電話番号', dict['連絡先電話番号'], True, False)
-        pFile.PrintText1(i.Inc(), 'E-Mailアドレス', dict['電子メールアドレス'], True, True)
+        pFile.PrintText1(i.Inc(), '上記フリガナ', itemsdict['連絡先氏名フリガナ'], True, False)
+        pFile.PrintText1(i.Inc(), '電話番号', itemsdict['連絡先電話番号'], True, False)
+        pFile.PrintText1(i.Inc(), 'E-Mailアドレス', itemsdict['電子メールアドレス'], True, True)
         pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
 #  本当はここに事項書
 
-    if dict['手続き'] == 'D051':       # 開局の時のみ
-        if dict['申請書バージョン'] >= '0009':
+    if itemsdict['手続き'] == 'D051':       # 開局の時のみ
+        if itemsdict['申請書バージョン'] >= '0009':
             i.Inc()
             n = root.find('p:申請書/p:申請手数料', ns)
             pFile.PrintText1(i.Inc(), '申請手数料/免許状受け取り方法', '')
@@ -530,17 +533,17 @@ def KaikyokuHenkou(root, pFile, dict):
 
     pFile.NewPage()
     i = Count(0)
-    Jikousho(root, pFile, dict)
+    Jikousho(root, pFile, itemsdict)
 
     pFile.NewPage()
     i = Count(0)
-    z = Sekkeisho1(root, pFile, dict, i)
+    z = Sekkeisho1(root, pFile, itemsdict, i)
     i.Set(z)
-    Sekkeisho2(root, pFile, dict, i)
+    Sekkeisho2(root, pFile, itemsdict, i)
 
     pFile.Finalize()
 
-def Jikousho(root, pFile, dict):
+def Jikousho(root, pFile, itemsdict):
     n = root.find('p:申請書/p:事項書_工事設計書情報', ns)
 
     isChange10 = False
@@ -551,7 +554,7 @@ def Jikousho(root, pFile, dict):
     isChange13 = False
     isChange16 = False
     changeItem = []
-    if dict['手続き'] == 'D053':
+    if itemsdict['手続き'] == 'D053':
         ｎ1 = n.find('p:変更項目', ns)
         if (n1.find('p:c.呼出符号', ns).text or '') == '1':
             isChange10 = True
@@ -580,13 +583,13 @@ def Jikousho(root, pFile, dict):
     pFile.PrintText1(i.Get(), '事項書', '')
 
     n1 = n.find('p:無線局の種別等', ns)
-    if dict['手続き'] != 'D051':
+    if itemsdict['手続き'] != 'D051':
         s = XmlMenkyo(n1.find('p:免許の番号', ns))
         pFile.PrintText1(i.Inc(), '1. 免許の番号', s, True, False)
         j = i.Get()
-        pFile.PrintText1(i.Inc(), '2. 申請(届出)の区分', dict['申請区分'], True, False)
+        pFile.PrintText1(i.Inc(), '2. 申請(届出)の区分', itemsdict['申請区分'], True, False)
     else:
-        pFile.PrintText1(i.Inc(), '2. 申請(届出)の区分', dict['申請区分'], True, False)
+        pFile.PrintText1(i.Inc(), '2. 申請(届出)の区分', itemsdict['申請区分'], True, False)
         j = i.Get()
 
     n1 = n.find('p:申請_届出_者名等', ns)
@@ -630,7 +633,7 @@ def Jikousho(root, pFile, dict):
         s2 = n1.find('p:代表者名フリガナ_姓名/p:名フリガナ', ns).text or ''
         pFile.PrintText1(i.Inc(), '', s1 + '' + s2, False, False)
 
-    if dict['手続き'] != 'D051':
+    if itemsdict['手続き'] != 'D051':
         n1 = n.find('p:無線局の種別等/p:工事落成の予定期日', ns)
         s = n1.find('p:工事落成の予定期日_区分', ns).text or ''
         if s != '':
@@ -645,7 +648,7 @@ def Jikousho(root, pFile, dict):
     n1 = n.find('p:目的等/p:無線従事者免許証の番号', ns)
     s1 = n1.find('p:番号/p:上位1', ns).text or ''
     s2 = n1.find('p:番号/p:下位1', ns).text or ''
-    if dict['申請書バージョン'] >= '0009':
+    if itemsdict['申請書バージョン'] >= '0009':
         s3 = n1.find('p:c.施行規則第34条の8に規定する_外国政府の証明書', ns).text or ''
     else:
         s3 = ''
@@ -659,7 +662,7 @@ def Jikousho(root, pFile, dict):
         pFile.textColor = red
     pFile.PrintText1(i.Inc(), '7. 無線従事者免許証の番号', s, True, False)
 
-    if dict['手続き'] != 'D051':
+    if itemsdict['手続き'] != 'D051':
         n1 = n.find('p:無線局の種別等', ns)
         if isChange10:
             pFile.textColor = red
@@ -727,24 +730,64 @@ def Jikousho(root, pFile, dict):
 
     pFile.DrowHorizontalLine(i.Get(), False, True)
 
-    if dict['手続き'] == 'D053':
+    if itemsdict['手続き'] == 'D053':
         s = ", ".join(changeItem)
         pFile.PrintText1(i.Inc(), '14. 変更する項目', s, False, True)
 
-    pFile.PrintText1(i.Inc(), '15. 備考', '', True, True)
-    j = j + 1
+# 事項書 備考(15)の処理（開設、変更共通）
+    ｎ1 = n.find('p:備考', ns)
+    s1 = '15. 備考'
+    s3 = n1.find('p:旧呼出符号希望', ns).text or ''
+    if s3 == '':
+        s3 = n1.find('p:呼出符号', ns).text or ''
+    n9 = n1.find('p:その他_備考/p:免許の番号', ns)
+    s4 = XmlMenkyo(n9)
+    n9 = n1.find('p:転出先地方局', ns)
+    s5 = ConfigGet('ATESAKI', n9.text or '')
+
+    s2 = n1.find('p:備考_呼出符号/p:c.現にアマチュア局を開設しているときは_その呼出符号', ns).text or ''
+    if s2 != '':
+        pFile.PrintText1(i.Inc(), s1, '現呼出符号 : ' + s3, False, False)
+        j = j + 1
+        s1 = ''
+    s2 = n1.find('p:備考_呼出符号/p:c.過去にアマチュア局を開設していた場合であって_そのアマチュア局の廃止又は免許の有効期間満了の日から6ヶ月を経過していないときは_そのアマチュア局に指定されていた呼出符号', ns).text or ''
+    if s2 != '':
+        pFile.PrintText1(i.Inc(), s1, '6ヶ月以内呼出符号 : ' + s3, False, False)
+        j = j + 1
+        s1 = ''
+    s2 = n1.find('p:備考_呼出符号/p:c.旧呼出符号希望', ns).text or ''
+    if s2 != '':
+        pFile.PrintText1(i.Inc(), s1, '旧呼出符号希望 : ' + s3, False, False)
+        j = j + 1
+        s1 = ''
+    s2 = n1.find('p:その他_備考/p:c.呼出符号の変更にともなう無線設備の設置_常置_場所の変更の場合は_免許の番号及び現に指定されている呼出符号', ns).text or ''
+    if s2 != '':
+        pFile.PrintText1(i.Inc(), s1, '免許の番号 : ' + s4 + '   転出先地方局 : ' + s5, False, False)
+        j = j + 1
+        s1 = ''
+    if s1 != '':
+        pFile.PrintText1(i.Inc(), s1, '', False, False)
+        j = j + 1
+    s1 = n1.find('p:備考_入力欄', ns).text or ''
+    if s1 != '':
+        k = 0
+        while k < len(s1):
+            s2 = s1[k:k + 30]
+            pFile.PrintText1(i.Inc(), '', s2, False, False)
+            k = k + 30
+
     pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
 
-def Sekkeisho1(root, pFile, dict, i):
+def Sekkeisho1(root, pFile, itemsdict, i):
     def Sekkeisho1_1(root, pFile, printing=True):
-        ver = dict['申請書バージョン']
+        ver = itemsdict['申請書バージョン']
         n = root  # rootは工事設計1
 
         n1 = n.find('p:装置の区別等', ns)
         s1 = n1.find('p:装置の区別', ns).text or ''
 
-        a = dict['免許の番号']
+        a = itemsdict['免許の番号']
         c = ConfigGet(a, 'unit' + s1)
         e = ConfigGet(a, 'comment' + s1)
         pFile.PrintText4(i.Get(), c, e, printing)       # 機種名等をプリント
@@ -861,7 +904,7 @@ def Sekkeisho1(root, pFile, dict, i):
     return i.Get()
 
 
-def Sekkeisho2(root, pFile, dict, i):
+def Sekkeisho2(root, pFile, itemsdict, i):
     def Sekkeisho2_1(root, pFile, printing=True):
         i.Inc()
         n = root  # 工事設計2
@@ -903,18 +946,18 @@ def Sekkeisho2(root, pFile, dict, i):
 
 
 
-def DXmlToPdf(fileName):
-    g = os.path.splitext(os.path.basename(fileName))        # ファイル名と拡張子を取得
+def DXmlToPdf(inFileName, outFileName):
+    g = os.path.splitext(os.path.basename(inFileName))        # ファイル名と拡張子を取得
     if (g[1] != '.zip') and (g[1] != '.xml'):
-        OutErrMsg(2, fileName)      # 拡張子不正
+        OutErrMsg(2, inFileName)      # 拡張子不正
         return False
 
-    if not os.path.isfile(fileName):
-        OutErrMsg(3, fileName)      # ファイルの存在
+    if not os.path.isfile(inFileName):
+        OutErrMsg(3, inFileName)      # ファイルの存在
         return False
 
     if g[1] == '.zip':
-        with zipfile.ZipFile(fileName, "r") as zips:
+        with zipfile.ZipFile(inFileName, "r") as zips:
             f = False
             for fn in zips.namelist():
                 fnU = fn.upper()
@@ -925,40 +968,47 @@ def DXmlToPdf(fileName):
                 OutErrMsg(6, "SHINSEI.XML")  # ファイルの存在
                 return False
     else:
-        f = open(fileName, encoding='utf-8')
+        f = open(inFileName, encoding='utf-8')
         xmlString = f.read()
         f.close()
     root = ET.fromstring(xmlString)  # rootの設定
 
-# pdfファイルが他プロセス瀬使われていないことを確認する必要がある
-    g = os.path.splitext(fileName)        # パス名と拡張子を取得
-    fn = g[0] + '.pdf'
+# pdfファイルが他プロセスで使われていないことを確認する必要がある
+#     g = os.path.splitext(inFileName)        # パス名と拡張子を取得
+#     if isPdfOutput:
+#         fn = g[0] + '.pdf'
+#     else:
+#         fn = os.path.dirname(__file__) + tempinFileName
+#    fn = outFileName
+
     try:
-        with open(fn, 'w') as fo:       # 試しに出力で開いてみる
+        with open(outFileName, 'w') as fo:       # 試しに出力で開いてみる
             fo.close
     except Exception as e:
-        OutErrMsg(4, fn)  # ファイルが使われている
+        OutErrMsg(4, outFileName)  # ファイルが使われている
         return False
 
-    pFile = DPdfEdit.Pdf(fn)
-    pFile.fileName = fileName
-    dict = XmlCommon(root)
+    pFile = DPdfEdit.Pdf(outFileName)
+    pFile.inFileName = inFileName
+    itemsdict = XmlCommon(root)
 
     tetsuzuki = XmlTetsuzuki(root)[0]
     if tetsuzuki == 'D052':     # 再免許
-        Saimen(root, pFile, dict)
+        Saimen(root, pFile, itemsdict)
     elif tetsuzuki == 'D055':    # 廃局
-        Haikyoku(root, pFile, dict)
+        Haikyoku(root, pFile, itemsdict)
     else:                       # 開局・変更
-        KaikyokuHenkou(root, pFile, dict)
+        KaikyokuHenkou(root, pFile, itemsdict)
 
-    ConfigSet('main', 'fileName', fileName)
-    ConfigSet('main', 'Application', dict['手続き名'])
-    ConfigSet('main', 'license', dict['免許の番号'])
-    ConfigSet('main', 'callsign', dict['呼出符号'])
-#    pFile.AddPage(fileName, 'test.pdf')    # 通算ページNo表示のため、　まだ正常じゃない
-    if isBrowse:
-        webbrowser.open(fn)
+    ConfigSet('main', 'FileName', inFileName)
+    ConfigSet('main', 'Application', itemsdict.get('手続き名'))
+    ConfigSet('main', 'license', itemsdict.get('免許の番号'))
+    ConfigSet('main', 'callsign', itemsdict.get('呼出符号'))
+#    pFile.AddPage(inFileName, 'test.pdf')    # 通算ページNo表示のため、　まだ正常じゃない
+    if itemsdict.get('ERROR') == False:
+        if isBrowse:
+            webbrowser.open(outFileName, new=1, autoraise=True)
+
 
 # argparse.ArgumentParserのWrapperクラス
 # 実行時にファイル名が指定されているかどうかを検出するため
@@ -968,10 +1018,10 @@ class MyArgumentParser(argparse.ArgumentParser):
 
 if __name__ == "__main__":
     isSlave = False
-    config.remove_section('ERROR')
     try:
         config = configparser.ConfigParser()
         config.read(iniFileName, 'utf-8-sig')
+        config.remove_section('ERROR')
     except configparser.MissingSectionHeaderError as e:
         config.read(iniFileName, 'utf-8')
     except UnicodeDecodeError as e:
@@ -979,22 +1029,31 @@ if __name__ == "__main__":
     except SystemExit as e:
         OutErrMsg(7, iniFileName)
 
-    ConfigSet('Args', 'TEST', 'args.FileName')
+    inFileName = ""
+    outFileName = ''
     try:
-        parser = argparse.ArgumentParser()
-        parser.add_argument('FileName', help='Input file name')
-        parser.add_argument('-b', '--browse', help='Browse rusult file', action='store_true')
+        parser = argparse.ArgumentParser(description='Convert xml file of DenshisinseiLite to pdf.      ')
+        parser.add_argument('inFile', nargs='?', help='Input zip or xml file name', type=str, default='')
+        parser.add_argument('outFile', nargs='?', help='Output pdf file name',  type=str, default='DXmlToPdf.pdf')
+        parser.add_argument('-b', '--browse', help='Browse pdf file', action='store_true')
         args = parser.parse_args()
-        inFileName = args.FileName
+        inFileName = args.inFile
+        outFileName = args.outFile
         isBrowse = args.browse
 
-#        inFileName = r"shinsei_E19-0000120282-D.zip"    # for DEBUG
-#        isBrowse = True                                 # for DEBUG
+        # for DEBUG
+        # inFileName = r"C:\Users\Kunio\Documents\Python Projects\DXmlToPdf\shinsei_E19-0000120282-D.zip"    # for DEBUG
+        # isBrowse = True
+        # isPdfOutput = False
+        print(inFileName)
+        print(outFileName)
+        print(isBrowse)
 
 # Iniファイルにファイル名等を書き込む
-        ConfigSet('Args', 'FileName', inFileName)
+        ConfigSet('Args', 'inFile', inFileName)
+        ConfigSet('Args', 'outFile', outFileName)
         ConfigSetBool('Args', 'Browse', isBrowse)
-        DXmlToPdf(inFileName)
+        DXmlToPdf(inFileName, outFileName)
 
     except SystemExit as e:
         OutErrMsg(1, inFileName)        # エラー理由をINIファイルに書き込み
