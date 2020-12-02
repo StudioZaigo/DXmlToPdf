@@ -97,6 +97,22 @@ class Pdf:
         self.pdfFile.setStrokeColor(self.textColor)
         self.textColor = black
 
+#    printText0～nまとめるための習作
+#    def PrintText(self, rowNo=0, text, textPos, textColor, lines, printing=True):
+#        if printing:
+#            y = self.PosY(rowNo)
+#            for cnt, pos in enumrate(textPos):
+#                if textColor[cnt] != '':
+#                    self.textColor = textColor[cnt]
+#                    self.ChangeColor()  # 指定した色にする
+#                self.pdfFile.drawString(self.textPos[cnt], y, text[cnt])
+#                self.ChangeColor()      # 黒に戻す
+#                self.pdfFile.setFillColor(black)
+#                self.pdfFile.setStrokeColor(black)
+#                self.pdfFile.drawString(self.textPos2[5], y, text3)
+#            self.DrowLines(rowNo, lines)
+
+
     def PrintText0(self, rowNo=0, left=0, text=''):
         x = self.PAGE_MARGIN['left'] + left
         y = self.PosY(rowNo)
@@ -166,6 +182,31 @@ class Pdf:
         s = "-  Page {}  -".format(str(self.pageNo))
         self.pdfFile.drawCentredString(x, y, s)
 
+
+#    def DrowInnerLines(self, rowNo=0, lines):
+#        x1 = self.LinePos[0]
+#        x2 = self.LinePos[1]
+#        y1 = (rowNo - 1) * self.ROW_HEIGHT + self.PAGE_MARGIN['top']
+#         y2 = rowNo * self.ROW_HEIGHT + self.PAGE_MARGIN['top']
+#         if upper:
+#             self.pdfFile.line(x1, y1, x2, y1)
+#         if lower:
+#             self.pdfFile.line(x1, y2, x2, y2)
+#
+#     def DrowOuterLines(self, rowNo=0, lines):
+#         x1 = self.LinePos[0]
+#         x2 = self.LinePos[1]
+#         y1 = (rowNo - 1) * self.ROW_HEIGHT + self.PAGE_MARGIN['top']
+#         y2 = rowNo * self.ROW_HEIGHT + self.PAGE_MARGIN['top']
+#         if 'upper' in lines:
+#             self.pdfFile.line(x1, y1, x2, y1)
+#         if 'lower' in lines:
+#             self.pdfFile.line(x1, y2, x2, y2)
+#         if 'left' in lines:
+#             self.pdfFile.line(x1, y1, x1, y2)
+#         if 'right' in lines:
+#             self.pdfFile.line(x2, y1, x2, y2)
+
     def DrowHorizontalLine(self, rowNo=0, upper=False, lower=False):
         x1 = self.LinePos[0]
         x2 = self.LinePos[1]
@@ -177,6 +218,8 @@ class Pdf:
             self.pdfFile.line(x1, y2, x2, y2)
 
     def DrowRectangle(self, y1, y2):
+        if y1 == y2:
+            return
         x = self.LinePos[0]
         y = y1
 

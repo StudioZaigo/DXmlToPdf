@@ -5,9 +5,10 @@ import zipfile
 import xml.etree.ElementTree as ET
 import configparser                 # 設定ファイルのパーサー
 import codecs
-import DPdfEdit
 from reportlab.lib.colors import black, red
 import webbrowser
+
+import DPdfEdit
 
 errMessage = {1: "Input file name isn't designated.",
               2: "Input file extension isn't 'zip' and 'xml'.",
@@ -537,6 +538,7 @@ def KaikyokuHenkou(root, pFile, dict):
     z = Sekkeisho1(root, pFile, dict, i)
     i.Set(z)
     Sekkeisho2(root, pFile, dict, i)
+    TenpuShorui(root, pFile, dict, i)
 
     pFile.Finalize()
 
@@ -725,15 +727,45 @@ def Jikousho(root, pFile, dict):
                 s1 = ''
         s2 = ''
 
-    pFile.DrowHorizontalLine(i.Get(), False, True)
-
     if dict['手続き'] == 'D053':
         s = ", ".join(changeItem)
-        pFile.PrintText1(i.Inc(), '14. 変更する項目', s, False, True)
+        pFile.PrintText1(i.Inc(), '14. 変更する項目', s, True, True)
 
-    pFile.PrintText1(i.Inc(), '15. 備考', '', True, True)
-    j = j + 1
-    pFile.DrowVerticalLine1(j, i.Get() - j + 1)
+    n3 = n.find('p:備考', ns)
+    n4 = n3.find('p:備考_呼出符号', ns)
+    s1 = n4.find('p:c.現にアマチュア局を開設しているときは_その呼出符号', ns).text or ''
+    s2 = n4.find(('p:c.過去にアマチュア局を開設していた場合であって_そのアマチュア局の廃止'
+                  '又は免許の有効期間満了の日から6ヶ月を経過していないときは_そのアマチュア局に'
+                  '指定されていた呼出符号'),ns).text or ''
+    s3 = n4.find('p:c.旧呼出符号希望', ns).text or ''
+    s4 = n3.find('p:備考_入力欄', ns).text or ''
+    if s1 != '' or s2 != '' or s3 != '' or s4 != '':
+        pFile.PrintText1(i.Inc(), '15. 備考', '', True, False)
+
+        if s1 != '':
+            s9 = n3.find('p:呼出符号', ns).text or ''
+            pFile.PrintText1(i.Inc(), '　　　現に有する呼出符号', s9, False, False)
+        elif s2 != '':
+            s9 = n3.find('p:呼出符号', ns).text or ''
+            pFile.PrintText1(i.Inc(), '　　　過去6か月以内に有した呼出符号', '　　　　　' + s9, False, False)
+        elif s3 != '':
+            s9 = n3.find('p:呼出符号', ns).text or ''
+            pFile.PrintText1(i.Inc(), '　　　旧呼出符号希望', s9, False, False)
+
+        s9 = XmlMenkyo(n3.find('p:その他_備考/p:免許の番号', ns))
+        if s1 != '' and s9 != '':
+            pFile.PrintText1(i.Inc(), '　　　免許の番号', s9, False, False)
+
+        s41 = '　　　備考'
+        z = 0
+        while z <= len(s4):
+            s9 = s4[z:z + 31]
+            pFile.PrintText1(i.Inc(), s41, s9, False, False)
+            s41 = ''
+            z = z + 31
+
+    pFile.DrowHorizontalLine(i.Get(), False, True)
+    pFile.DrowVerticalLine1(j + 1, i.Get() - j)
 
 
 def Sekkeisho1(root, pFile, dict, i):
@@ -863,10 +895,10 @@ def Sekkeisho1(root, pFile, dict, i):
 
 def Sekkeisho2(root, pFile, dict, i):
     def Sekkeisho2_1(root, pFile, printing=True):
-        i.Inc()
         n = root  # 工事設計2
         pFile.PrintText3(i.Inc(), '16. 工事設計書(2)', '', '', '', False, False, printing)
 
+        j = i.Get() + 1  # 垂直線開始位置
         s1 = '空中線の型式'
         s2 = ''
         for n1 in n.findall('p:送信空中線の型式情報', ns):
@@ -874,65 +906,108 @@ def Sekkeisho2(root, pFile, dict, i):
             s2 += (',' + s)
         s2 = s2[1:]
         pFile.PrintText3(i.Inc(), s1, s2, '', '', True, False, printing)
-        j = i.Get()
 
         s2 = ConfigGet('COUNTER', n.find('p:周波数測定装置の有無', ns).text or '')
         pFile.PrintText3(i.Inc(), '周波数測定装置の有無', s2, '', '', True, False, printing)
+
+        s2 = n.find('p:c.送信機系統図', ns).text or ''
+        if s2 == '1':
+            s2 = '送信機系統図'
+            pFile.PrintText3(i.Inc(), '添付図面', s2, '', '', True, False, printing)
 
         s = n.find('p:その他の工事設計', ns).text or ''
         s2 = ''
         if s == '1':
             s2 = '電波法第３章に規定する条件に合致する。'
         pFile.PrintText3(i.Inc(), 'その他の工事', s2, '', '', True, False, printing)
-
         if printing:
             pFile.DrowVerticalLine1(j, i.Get() - j + 1)
 
         return i.Get() - j      # 印刷した行数を返す
-#   def Sekkeisho2_1(root, pFile, printing=True):の終わり
+        #Sekkeisho2_1の終わり
 
     n = root.find('p:申請書/p:事項書_工事設計書情報/p:工事設計2', ns)
-
-    k = i.Get()
-    z = Sekkeisho2_1(n, pFile, False)
-    i.Set(k)
-    if z > pFile.maxRowsCount - i.Get():
+    k = i.Get()    # 現在行を保存する
+    z = Sekkeisho2_1(n, pFile, False)  # 印刷する行数をカウントする
+    i.Set(k)    # 保存した現在行を戻す
+    if i.Get() + z > pFile.maxRowsCount - 1:
         pFile.NewPage()
-        i = Count(0)
-    Sekkeisho2_1(n, pFile, True)
+        i.Set(-1)
+    else:
+        i.Inc()    # 改ページしない場合の工事設計2の前の余白行
+    Sekkeisho2_1(n, pFile, True)    # 工事設計2を印刷する
 
 
+def TenpuShorui(root, pFile, dict, i):
+    def TenpuShorui_1(root, pFile, printing=True):
+        n = root  # 添付書類
 
-def DXmlToPdf(fileName):
-    g = os.path.splitext(os.path.basename(fileName))        # ファイル名と拡張子を取得
+        j = i.Get() + 1  # 垂直線開始位置
+        s1 = '添付書類'
+        for n1 in n.findall('p:添付書類', ns):
+            s2 = n1.find('p:添付ファイル名', ns).text or ''
+            s3 = n1.find('p:通信欄', ns).text or ''
+            if s1 != '' and (s2 != '' or s3 != ''):
+                pFile.PrintText3(i.Inc(), s1, '', '', '', False, False, printing)
+                s1 = ''
+                j = i.Get() + 1
+            if s2 != '':
+                pFile.PrintText3(i.Inc(), '添付ファイル名', s2, '', '', True, False, printing)
+                s1 = ''
+            s3 = n1.find('p:通信欄', ns).text or ''
+            if s3 != '':
+                pFile.PrintText3(i.Inc(), '通信欄', s3, '', '', True, False, printing)
+                s1 = ''
+        if printing:
+            pFile.DrowVerticalLine1(j, i.Get() - j + 1)
+        return i.Get() - j      # 印刷した行数を返す
+        #TenpuShorui_1_1の終わり
+
+    n = root.find('p:申請書/p:事項書_工事設計書情報', ns)
+    k = i.Get()    # 現在行を保存する
+    z = TenpuShorui_1(n, pFile, False)  # 印刷する行数をカウントする
+    i.Set(k)    # 保存した現在行を戻す
+    if i.Get() + z > pFile.maxRowsCount - 1:
+        pFile.NewPage()
+        i.Set(-1)
+    else:
+        i.Inc()    # 改ページしない場合の添付書類の前の余白行
+    TenpuShorui_1(n, pFile, True)    # 添付書類を印刷する
+
+
+def DXmlToPdf(inFileName, outFileName):
+    g = os.path.splitext(os.path.basename(inFileName))        # ファイル名と拡張子を取得
     if (g[1] != '.zip') and (g[1] != '.xml'):
-        OutErrMsg(2, fileName)      # 拡張子不正
+        OutErrMsg(2, inFileName)      # 拡張子不正
         return False
 
-    if not os.path.isfile(fileName):
-        OutErrMsg(3, fileName)      # ファイルの存在
+    if not os.path.isfile(inFileName):
+        OutErrMsg(3, inFileName)      # ファイルの存在
         return False
 
     if g[1] == '.zip':
-        with zipfile.ZipFile(fileName, "r") as zips:
+        with zipfile.ZipFile(inFileName, "r") as zips:
             f = False
             for fn in zips.namelist():
-                fnU = fn.upper()
-                if (fnU == "SINSEI.XML") or (fnU == "SHINSEI.XML"):
+                fnU = fn.lower()
+                if (fnU == "sinsei.xml") or (fnU == "shinsei.xml"):
                     f = True
                     xmlString = zips.read(fn)
             if not f:
-                OutErrMsg(6, "SHINSEI.XML")  # ファイルの存在
+                OutErrMsg(6, "shinsei.xml")  # ファイルの存在
                 return False
     else:
-        f = open(fileName, encoding='utf-8')
+        f = open(inFileName, encoding='utf-8')
         xmlString = f.read()
         f.close()
     root = ET.fromstring(xmlString)  # rootの設定
 
 # pdfファイルが他プロセス瀬使われていないことを確認する必要がある
-    g = os.path.splitext(fileName)        # パス名と拡張子を取得
-    fn = g[0] + '.pdf'
+    if outFileName == '':
+        g = os.path.splitext(inFileName)        # パス名と拡張子を取得
+        fn = g[0] + '.pdf'
+    else:
+        fn = outFileName
     try:
         with open(fn, 'w') as fo:       # 試しに出力で開いてみる
             fo.close
@@ -941,7 +1016,7 @@ def DXmlToPdf(fileName):
         return False
 
     pFile = DPdfEdit.Pdf(fn)
-    pFile.fileName = fileName
+    pFile.fileName = inFileName
     dict = XmlCommon(root)
 
     tetsuzuki = XmlTetsuzuki(root)[0]
@@ -952,11 +1027,11 @@ def DXmlToPdf(fileName):
     else:                       # 開局・変更
         KaikyokuHenkou(root, pFile, dict)
 
-    ConfigSet('main', 'fileName', fileName)
+    ConfigSet('main', 'fileName', inFileName)
     ConfigSet('main', 'Application', dict['手続き名'])
     ConfigSet('main', 'license', dict['免許の番号'])
     ConfigSet('main', 'callsign', dict['呼出符号'])
-#    pFile.AddPage(fileName, 'test.pdf')    # 通算ページNo表示のため、　まだ正常じゃない
+#    pFile.AddPage(inFileName, 'test.pdf')    # 通算ページNo表示のため、　まだ正常じゃない
     if isBrowse:
         webbrowser.open(fn)
 
@@ -968,7 +1043,9 @@ class MyArgumentParser(argparse.ArgumentParser):
 
 if __name__ == "__main__":
     isSlave = False
-    config.remove_section('ERROR')
+    config = configparser.ConfigParser()
+    print(config.remove_section('ERROR'))
+
     try:
         config = configparser.ConfigParser()
         config.read(iniFileName, 'utf-8-sig')
@@ -982,19 +1059,22 @@ if __name__ == "__main__":
     ConfigSet('Args', 'TEST', 'args.FileName')
     try:
         parser = argparse.ArgumentParser()
-        parser.add_argument('FileName', help='Input file name')
-        parser.add_argument('-b', '--browse', help='Browse rusult file', action='store_true')
+        parser.add_argument('inp', help='Input file name')
+        parser.add_argument('-o', '--output', default='', help='Output file name')
+        parser.add_argument('-b', '--browse', default=True, help='Browse PDF file', action='store_true')
         args = parser.parse_args()
-        inFileName = args.FileName
+        inFileName = args.inp
+        outFileName = args.output
         isBrowse = args.browse
 
 #        inFileName = r"shinsei_E19-0000120282-D.zip"    # for DEBUG
 #        isBrowse = True                                 # for DEBUG
 
 # Iniファイルにファイル名等を書き込む
-        ConfigSet('Args', 'FileName', inFileName)
+        ConfigSet('Args', 'inFileName', inFileName)
+        ConfigSet('Args', 'outFileName', outFileName)
         ConfigSetBool('Args', 'Browse', isBrowse)
-        DXmlToPdf(inFileName)
+        DXmlToPdf(inFileName, outFileName)
 
     except SystemExit as e:
         OutErrMsg(1, inFileName)        # エラー理由をINIファイルに書き込み
