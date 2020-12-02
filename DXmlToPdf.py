@@ -5,10 +5,9 @@ import zipfile
 import xml.etree.ElementTree as ET
 import configparser                 # 設定ファイルのパーサー
 import codecs
+import DPdfEdit
 from reportlab.lib.colors import black, red
 import webbrowser
-
-import DPdfEdit
 
 errMessage = {1: "Input file name isn't designated.",
               2: "Input file extension isn't 'zip' and 'xml'.",
@@ -729,6 +728,7 @@ def Jikousho(root, pFile, dict):
 
     if dict['手続き'] == 'D053':
         s = ", ".join(changeItem)
+<<<<<<< HEAD
         pFile.PrintText1(i.Inc(), '14. 変更する項目', s, True, True)
 
     n3 = n.find('p:備考', ns)
@@ -766,6 +766,13 @@ def Jikousho(root, pFile, dict):
 
     pFile.DrowHorizontalLine(i.Get(), False, True)
     pFile.DrowVerticalLine1(j + 1, i.Get() - j)
+=======
+        pFile.PrintText1(i.Inc(), '14. 変更する項目', s, False, True)
+
+    pFile.PrintText1(i.Inc(), '15. 備考', '', True, True)
+    j = j + 1
+    pFile.DrowVerticalLine1(j, i.Get() - j + 1)
+>>>>>>> parent of 03ade17... Ver2.0.3d
 
 
 def Sekkeisho1(root, pFile, dict, i):
@@ -975,8 +982,14 @@ def TenpuShorui(root, pFile, dict, i):
     TenpuShorui_1(n, pFile, True)    # 添付書類を印刷する
 
 
+<<<<<<< HEAD
 def DXmlToPdf(inFileName, outFileName):
     g = os.path.splitext(os.path.basename(inFileName))        # ファイル名と拡張子を取得
+=======
+
+def DXmlToPdf(fileName):
+    g = os.path.splitext(os.path.basename(fileName))        # ファイル名と拡張子を取得
+>>>>>>> parent of 03ade17... Ver2.0.3d
     if (g[1] != '.zip') and (g[1] != '.xml'):
         OutErrMsg(2, inFileName)      # 拡張子不正
         return False
@@ -1059,20 +1072,31 @@ if __name__ == "__main__":
     ConfigSet('Args', 'TEST', 'args.FileName')
     try:
         parser = argparse.ArgumentParser()
+<<<<<<< HEAD
         parser.add_argument('inp', help='Input file name')
         parser.add_argument('-o', '--output', default='', help='Output file name')
         parser.add_argument('-b', '--browse', default=True, help='Browse PDF file', action='store_true')
         args = parser.parse_args()
         inFileName = args.inp
         outFileName = args.output
+=======
+        parser.add_argument('FileName', help='Input file name')
+        parser.add_argument('-b', '--browse', help='Browse rusult file', action='store_true')
+        args = parser.parse_args()
+        inFileName = args.FileName
+>>>>>>> parent of 03ade17... Ver2.0.3d
         isBrowse = args.browse
 
 #        inFileName = r"shinsei_E19-0000120282-D.zip"    # for DEBUG
 #        isBrowse = True                                 # for DEBUG
 
 # Iniファイルにファイル名等を書き込む
+<<<<<<< HEAD
         ConfigSet('Args', 'inFileName', inFileName)
         ConfigSet('Args', 'outFileName', outFileName)
+=======
+        ConfigSet('Args', 'FileName', inFileName)
+>>>>>>> parent of 03ade17... Ver2.0.3d
         ConfigSetBool('Args', 'Browse', isBrowse)
         DXmlToPdf(inFileName, outFileName)
 
